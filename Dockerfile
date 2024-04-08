@@ -5,21 +5,11 @@ ARG BUILD_IMAGE
 # =====================================================================
 FROM ${BUILD_IMAGE} AS build
 
-ARG GONOPROXY
-ARG GONOSUMDB
-ARG GOPRIVATE
-ARG GOPROXY
-ARG GOSUMDB
 ARG VERSION
 
 COPY ./ /workspace
 
 RUN cd /workspace && \
-    GONOPROXY=${GONOPROXY} \
-    GONOSUMDB=${GONOSUMDB} \
-    GOPRIVATE=${GOPRIVATE} \
-    GOPROXY=${GOPROXY} \
-    GOSUMDB=${GOSUMDB} \
     VERSION=${VERSION} \
       make all
 
