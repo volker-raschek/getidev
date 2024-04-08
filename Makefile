@@ -5,8 +5,8 @@ VERSION?=$(shell git describe --abbrev=0)+hash.$(shell git rev-parse --short HEA
 CONTAINER_RUNTIME?=$(shell which podman)
 
 # CONTAINER_IMAGE
-CONTAINER_IMAGE_REGISTRY_HOST?=docker.io
-CONTAINER_IMAGE_REPOSITORY=volkerraschek/getidev
+CONTAINER_IMAGE_REGISTRY_HOST?=git.cryptic.systems
+CONTAINER_IMAGE_REPOSITORY=volker.raschek/getidev
 CONTAINER_IMAGE_VERSION?=latest
 CONTAINER_IMAGE_FULLY_QUALIFIED=${CONTAINER_IMAGE_REGISTRY_HOST}/${CONTAINER_IMAGE_REPOSITORY}:${CONTAINER_IMAGE_VERSION}
 
@@ -24,7 +24,7 @@ getidev:
 # ==============================================================================
 PHONY+=clean
 clean:
-	rm --force --recursive $(shell pwd)/getidev*
+	rm -f -r $(shell pwd)/getidev*
 
 # GOLANGCI-LINT
 # ==============================================================================
