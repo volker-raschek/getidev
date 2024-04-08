@@ -1,9 +1,4 @@
-ARG BASE_IMAGE
-ARG BUILD_IMAGE
-
-# BUILD
-# =====================================================================
-FROM ${BUILD_IMAGE} AS build
+FROM docker.io/library/golang:1.21.6-alpine3.18
 
 ARG VERSION
 
@@ -15,7 +10,7 @@ RUN cd /workspace && \
 
 # TARGET
 # =====================================================================
-FROM ${BASE_IMAGE}
+FROM docker.io/library/alpine:3.19
 
 COPY --from=build /workspace/getidev /usr/bin/getidev
 
