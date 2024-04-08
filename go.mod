@@ -1,3 +1,3 @@
-module github.com/volker-raschek/getidev
+module git.cryptic.systems/volker.raschek/getidev
 
-go 1.16
+go 1.21
