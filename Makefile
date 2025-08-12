@@ -1,30 +1,58 @@
-# VERSION
+EXECUTABLE=getidev
 VERSION?=$(shell git describe --abbrev=0)+hash.$(shell git rev-parse --short HEAD)
 
+# Destination directory and prefix to place the compiled binaries, documentaions
+# and other files.
+DESTDIR?=
+PREFIX?=/usr/local
+
 # CONTAINER_RUNTIME
+# The CONTAINER_RUNTIME variable will be used to specified the path to a
+# container runtime. This is needed to start and run a container image.
 CONTAINER_RUNTIME?=$(shell which podman)
 
-# CONTAINER_IMAGE
-CONTAINER_IMAGE_REGISTRY_HOST?=git.cryptic.systems
-CONTAINER_IMAGE_REPOSITORY=volker.raschek/getidev
-CONTAINER_IMAGE_VERSION?=latest
-CONTAINER_IMAGE_FULLY_QUALIFIED=${CONTAINER_IMAGE_REGISTRY_HOST}/${CONTAINER_IMAGE_REPOSITORY}:${CONTAINER_IMAGE_VERSION}
+# GETIDEV_IMAGE_REGISTRY_NAME
+# Defines the name of the new container to be built using several variables.
+GETIDEV_IMAGE_REGISTRY_NAME:=git.cryptic.systems
+GETIDEV_IMAGE_REGISTRY_USER:=volker.raschek
 
-# EXECUTABLES
+GETIDEV_IMAGE_NAMESPACE?=${GETIDEV_IMAGE_REGISTRY_USER}
+GETIDEV_IMAGE_NAME:=${EXECUTABLE}
+GETIDEV_IMAGE_VERSION?=latest
+GETIDEV_IMAGE_FULLY_QUALIFIED=${GETIDEV_IMAGE_REGISTRY_NAME}/${GETIDEV_IMAGE_NAMESPACE}/${GETIDEV_IMAGE_NAME}:${GETIDEV_IMAGE_VERSION}
+
+# BIN
 # ==============================================================================
-EXECUTABLE_TARGETS=getidev
-
-PHONY=all
-all: clean ${EXECUTABLE_TARGETS}
-
 getidev:
-	go build -tags netgo -ldflags "-X main.version=${VERSION}" -o ${@} main.go
+	CGO_ENABLED=0 \
+	GOPROXY=$(shell go env GOPROXY) \
+		go build -ldflags "-X 'main.version=${VERSION}'" -o ${@} main.go
 
 # CLEAN
 # ==============================================================================
 PHONY+=clean
 clean:
-	rm -f -r $(shell pwd)/getidev*
+	rm --force --recursive getidev
+
+# TESTS
+# ==============================================================================
+PHONY+=test/unit
+test/unit:
+	CGO_ENABLED=0 \
+	GOPROXY=$(shell go env GOPROXY) \
+		go test -v -p 1 -coverprofile=coverage.txt -covermode=count -timeout 1200s ./pkg/...
+
+# PHONY+=test/integration
+# test/integration:
+# 	CGO_ENABLED=0 \
+# 	GOPROXY=$(shell go env GOPROXY) \
+# 		go test -v -p 1 -count=1 -timeout 1200s ./it/...
+
+PHONY+=test/coverage
+test/coverage: test/unit
+	CGO_ENABLED=0 \
+	GOPROXY=$(shell go env GOPROXY) \
+		go tool cover -html=coverage.txt
 
 # GOLANGCI-LINT
 # ==============================================================================
@@ -32,61 +60,55 @@ PHONY+=golangci-lint
 golangci-lint:
 	golangci-lint run --concurrency=$(shell nproc)
 
-# GOSEC
+# INSTALL
 # ==============================================================================
-PHONY+=gosec
-gosec:
-	gosec $(shell pwd)/...
+PHONY+=uninstall
+install: getidev
+	install --directory ${DESTDIR}/etc/bash_completion.d
+	./getidev completion bash > ${DESTDIR}/etc/bash_completion.d/${EXECUTABLE}
 
-# CONTAINER-IMAGE
+	install --directory ${DESTDIR}${PREFIX}/bin
+	install --mode 0755 ${EXECUTABLE} ${DESTDIR}${PREFIX}/bin/${EXECUTABLE}
+
+	install --directory ${DESTDIR}${PREFIX}/share/licenses/${EXECUTABLE}
+	install --mode 0644 LICENSE ${DESTDIR}${PREFIX}/share/licenses/${EXECUTABLE}/LICENSE
+
+# UNINSTALL
+# ==============================================================================
+PHONY+=uninstall
+uninstall:
+	-rm --force --recursive \
+		${DESTDIR}/etc/bash_completion.d/${EXECUTABLE} \
+		${DESTDIR}${PREFIX}/bin/${EXECUTABLE} \
+		${DESTDIR}${PREFIX}/share/licenses/${EXECUTABLE}
+
+# BUILD CONTAINER IMAGE
 # ==============================================================================
 PHONY+=container-image/build
 container-image/build:
 	${CONTAINER_RUNTIME} build \
 		--build-arg VERSION=${VERSION} \
-		--file ./Dockerfile \
+		--file Dockerfile \
 		--no-cache \
-		--tag ${CONTAINER_IMAGE_FULLY_QUALIFIED} \
+		--pull \
+		--tag ${GETIDEV_IMAGE_FULLY_QUALIFIED} \
 		.
 
+# DELETE CONTAINER IMAGE
+# ==============================================================================
+PHONY:=container-image/delete
+container-image/delete:
+	- ${CONTAINER_RUNTIME} image rm ${GETIDEV_IMAGE_FULLY_QUALIFIED}
+
+# PUSH CONTAINER IMAGE
+# ==============================================================================
 PHONY+=container-image/push
-container-image/push: container-image/build
-	${CONTAINER_RUNTIME} push ${CONTAINER_IMAGE_FULLY_QUALIFIED}
-
-# CONTAINER STEPS - EXECUTABLE
-# ==============================================================================
-PHONY+=container-run/all
-container-run/all:
-	$(MAKE) container-run COMMAND=${@:container-run/%=%}
-
-PHONY+=${EXECUTABLE_TARGETS:%=container-run/%}
-${EXECUTABLE_TARGETS:%=container-run/%}:
-	$(MAKE) container-run COMMAND=${@:container-run/%=%}
-
-# CONTAINER STEPS - CLEAN
-# ==============================================================================
-PHONY+=container-run/clean
-container-run/clean:
-	$(MAKE) container-run COMMAND=${@:container-run/%=%}
-
-# GENERAL CONTAINER COMMAND
-# ==============================================================================
-PHONY+=container-run
-container-run:
-	${CONTAINER_RUNTIME} run \
-		--env CONTAINER_IMAGE_VERSION=${CONTAINER_IMAGE_VERSION} \
-		--env VERSION=${VERSION} \
-		--net=host \
-		--rm \
-		--volume /tmp:/tmp \
-		--volume "${HOME}/go:/root/go" \
-		--volume "$(shell pwd):$(shell pwd)" \
-		--workdir "$(shell pwd)" \
-			${BUILD_IMAGE_FULLY_QUALIFIED} \
-				make ${COMMAND}
+container-image/push:
+	echo ${GETIDEV_IMAGE_REGISTRY_PASSWORD} | ${CONTAINER_RUNTIME} login ${GETIDEV_IMAGE_REGISTRY_NAME} --username ${GETIDEV_IMAGE_REGISTRY_USER} --password-stdin
+	${CONTAINER_RUNTIME} push ${GETIDEV_IMAGE_FULLY_QUALIFIED}
 
 # PHONY
 # ==============================================================================
-# Declare the contents of the PHONY variable as phony. We keep that information
+# Declare the contents of the PHONY variable as phony.  We keep that information
 # in a variable so we can use it in if_changed.
 .PHONY: ${PHONY}
