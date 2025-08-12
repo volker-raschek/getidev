@@ -8,8 +8,6 @@ import (
 	"strings"
 )
 
-var version string
-
 func main() {
 	ips := os.Args[1:]
 	switch {
@@ -34,7 +32,10 @@ func main() {
 
 		for _, addr := range addrs {
 			if strings.Split(addr.String(), "/")[0] == ip {
-				fmt.Fprintln(os.Stdout, iface.Name)
+				_, err = fmt.Fprintln(os.Stdout, iface.Name)
+				if err != nil {
+					log.Fatal(err.Error())
+				}
 				return
 			}
 		}
